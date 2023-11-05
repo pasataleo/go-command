@@ -1,9 +1,6 @@
 package command
 
 import (
-	"bytes"
-	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/pasataleo/go-errors/errors"
@@ -17,8 +14,9 @@ type Command struct {
 	Name        string
 	Description string
 
-	FlagSet  *flags.Set
-	Injector *inject.Injector
+	GlobalFlags *flags.Set
+	LocalFlags  *flags.Set
+	Injector    *inject.Injector
 
 	Fn       Function
 	Children map[string]*Command
@@ -34,7 +32,8 @@ func create(name string, description string, injector *inject.Injector, makeHelp
 	cmd := &Command{
 		Name:        name,
 		Description: description,
-		FlagSet:     flags.NewSet(),
+		GlobalFlags: flags.NewSet(),
+		LocalFlags:  flags.NewSet(),
 		Injector:    injector,
 		Children:    make(map[string]*Command),
 	}
@@ -94,93 +93,26 @@ func (cmd *Command) Execute(args []string) error {
 	}
 
 	if cmd.Fn != nil {
-		args, err := cmd.FlagSet.Parse(args)
+		var err error
+
+		// First, we'll parse the global flags from all our parents.
+		for parent := cmd.Parent; parent != nil; parent = parent.Parent {
+			var parentErr error
+			args, parentErr = parent.GlobalFlags.Parse(args)
+			err = errors.Append(err, parentErr)
+		}
+
+		// Next, we'll parse the local flags for this command.
+		var argsErr error
+		args, argsErr = cmd.LocalFlags.Parse(args)
+		err = errors.Append(err, argsErr)
+
 		if err != nil {
 			return err
 		}
+
 		return cmd.Fn(cmd, args)
 	} else {
 		return cmd.Children["help"].Execute(args)
-	}
-}
-
-func (cmd *Command) help() Function {
-	return func(_ *Command, args []string) error {
-		var buffer bytes.Buffer
-
-		usage := cmd.Name
-		for parent := cmd.Parent; parent != nil; parent = parent.Parent {
-			usage = parent.Name + " " + usage
-		}
-
-		buffer.WriteString(fmt.Sprintf("Usage: %s", usage))
-		if len(cmd.FlagSet.Flags) > 0 {
-			buffer.WriteString(fmt.Sprintln(" [flags]"))
-		} else {
-			buffer.WriteString(fmt.Sprintln())
-		}
-
-		if len(cmd.Description) > 0 {
-			buffer.WriteString(fmt.Sprintln())
-			buffer.WriteString(fmt.Sprintln(cmd.Description))
-		}
-
-		if len(cmd.FlagSet.Flags) > 0 {
-			buffer.WriteString(fmt.Sprintln())
-			buffer.WriteString(fmt.Sprintln("Flags:"))
-
-			length := 0
-			var names []string
-			for name, flag := range cmd.FlagSet.Flags {
-				rendered := fmt.Sprintf("--%s=%T", name, flag.Default)
-				if len(rendered) > length {
-					length = len(name)
-				}
-				names = append(names, rendered)
-			}
-			sort.Strings(names)
-
-			for _, name := range names {
-				flag := cmd.FlagSet.Flags[name]
-				buffer.WriteString(fmt.Sprintf("  %-*s", length, fmt.Sprintf("--%s=%T", name, flag.Default)))
-				if len(flag.Description) > 0 {
-					buffer.WriteString(fmt.Sprintf(" %s", flag.Description))
-				}
-				if len(flag.Aliases) > 0 {
-					buffer.WriteString(fmt.Sprintf(", aliases: %s", strings.Join(flag.Aliases, ", ")))
-				}
-				if flag.Optional {
-					buffer.WriteString(fmt.Sprintf(", default: %v", flag.Default))
-				}
-				buffer.WriteString(fmt.Sprintln())
-			}
-		}
-
-		if len(cmd.Children) > 0 {
-			buffer.WriteString(fmt.Sprintln())
-			buffer.WriteString(fmt.Sprintln("Commands:"))
-
-			length := 0
-			var names []string
-			for name := range cmd.Children {
-				if len(name) > length {
-					length = len(name)
-				}
-				names = append(names, name)
-			}
-			sort.Strings(names)
-
-			for _, name := range names {
-				child := cmd.Children[name]
-				buffer.WriteString(fmt.Sprintf("  %-*s", length, name))
-				if len(child.Description) > 0 {
-					buffer.WriteString(fmt.Sprintf(" %s", child.Description))
-				}
-				buffer.WriteString(fmt.Sprintln())
-			}
-		}
-
-		fmt.Println(buffer.String())
-		return nil
 	}
 }
