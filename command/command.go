@@ -1,6 +1,7 @@
 package command
 
 import (
+	"os"
 	"strings"
 
 	"github.com/pasataleo/go-errors/errors"
@@ -11,29 +12,37 @@ import (
 type Function func(command *Command, args []string) error
 
 type Command struct {
+	*inject.Injector
+
 	Name        string
 	Description string
 
 	GlobalFlags *flags.Set
 	LocalFlags  *flags.Set
-	Injector    *inject.Injector
 
 	Fn       Function
 	Children map[string]*Command
+
+	Stdin  *os.File
+	Stdout *os.File
+	Stderr *os.File
 
 	Parent *Command
 }
 
 func New(name string, description string) *Command {
-	return create(name, description, inject.NewInjector(), true)
+	return create(name, description, inject.NewInjector(), os.Stdin, os.Stdout, os.Stderr, true)
 }
 
-func create(name string, description string, injector *inject.Injector, makeHelp bool) *Command {
+func create(name string, description string, injector *inject.Injector, stdin, stdout, stderr *os.File, makeHelp bool) *Command {
 	cmd := &Command{
 		Name:        name,
 		Description: description,
 		GlobalFlags: flags.NewSet(),
 		LocalFlags:  flags.NewSet(),
+		Stderr:      stderr,
+		Stdout:      stdout,
+		Stdin:       stdin,
 		Injector:    injector,
 		Children:    make(map[string]*Command),
 	}
@@ -60,7 +69,7 @@ func (cmd *Command) add(name string, description string, makeHelp bool) (*Comman
 		return nil, errors.Newf(nil, errors.ErrorCodeUnknown, "command %s already exists", name)
 	}
 
-	child := create(name, description, cmd.Injector, makeHelp)
+	child := create(name, description, cmd.Injector, cmd.Stdin, cmd.Stdout, cmd.Stderr, makeHelp)
 	child.Parent = cmd
 	cmd.Children[name] = child
 	return child, nil
