@@ -5,13 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pasataleo/go-config/pkg/config"
-	"github.com/pasataleo/go-config/pkg/defaults"
-	"github.com/pasataleo/go-config/pkg/env"
 	"github.com/pasataleo/go-config/pkg/flags"
-	"github.com/pasataleo/go-config/pkg/hidden"
-	"github.com/pasataleo/go-config/pkg/required"
-	"github.com/pasataleo/go-config/pkg/usage"
 	"github.com/pasataleo/go-errorsx/pkg/errorsx"
 )
 
@@ -133,22 +127,6 @@ type completionEnvVar struct {
 	desc     string
 	def      string
 	required bool
-}
-
-// configMetadata calls config.Find with metadata-only sources (no runtime values)
-// and returns the full found map for use by both flag and env var extraction.
-func configMetadata(cfg interface{}) map[string]map[string]interface{} {
-	if cfg == nil {
-		return nil
-	}
-	return config.New(
-		new(flags.Source),
-		new(env.Source),
-		new(hidden.Source),
-		new(usage.Source),
-		new(defaults.Source),
-		new(required.Source),
-	).Find(cfg)
 }
 
 func collectCompletionFlags(meta map[string]map[string]interface{}) []completionFlag {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestStringShortcut(t *testing.T) {
 		"": "My CLI tool",
 	})
 
-	testingx.Call(t, cmds.Execute, []string{}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{}).
 		NoError()
 }
 
@@ -40,7 +41,7 @@ func TestFunctionShortcut(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"extra", "args"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"extra", "args"}).
 		NoError()
 
 	testingx.Capture(t, called).Equal(true)
@@ -55,7 +56,7 @@ func TestFunctionShortcutError(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{}).
 		MatchesError("something went wrong")
 }
 
@@ -82,12 +83,12 @@ func TestSubcommandRouting(t *testing.T) {
 	})
 
 	leaf = ""
-	testingx.Call(t, cmds.Execute, []string{"parent", "child"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"parent", "child"}).
 		NoError()
 	testingx.Capture(t, leaf).Equal("child")
 
 	leaf = ""
-	testingx.Call(t, cmds.Execute, []string{"other"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"other"}).
 		NoError()
 	testingx.Capture(t, leaf).Equal("other")
 }
@@ -112,7 +113,7 @@ func TestFlagParsing(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--name", "alice", "--port=8080"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--name", "alice", "--port=8080"}).
 		NoError()
 
 	testingx.Capture(t, cfg.Name).Equal("alice")
@@ -138,7 +139,7 @@ func TestDefaultValues(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{}).
 		NoError()
 
 	testingx.Capture(t, cfg.Host).Equal("localhost")
@@ -161,7 +162,7 @@ func TestFlagsOverrideDefaults(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--host", "example.com"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--host", "example.com"}).
 		NoError()
 
 	testingx.Capture(t, cfg.Host).Equal("example.com")
@@ -185,7 +186,7 @@ func TestEnvironmentVariables(t *testing.T) {
 
 	t.Setenv("TEST_COMMAND_TOKEN", "secret123")
 
-	testingx.Call(t, cmds.Execute, []string{}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{}).
 		NoError()
 
 	testingx.Capture(t, cfg.Token).Equal("secret123")
@@ -200,6 +201,9 @@ func TestDependencyInjection(t *testing.T) {
 		DB string `inject:"database-url"`
 	}
 
+	injector := inject.New()
+	injector.Bind("postgres://localhost/mydb", "database-url")
+
 	cfg := new(Config)
 	cmds := Build("app", map[string]interface{}{
 		"": &Command{
@@ -208,12 +212,9 @@ func TestDependencyInjection(t *testing.T) {
 				return nil
 			},
 		},
-	})
+	}, Injector(injector))
 
-	injector := inject.New()
-	injector.Bind("postgres://localhost/mydb", "database-url")
-
-	testingx.Call(t, cmds.Execute, []string{}, injector).
+	testingx.Call(t, cmds.Execute, []string{}).
 		NoError()
 
 	testingx.Capture(t, cfg.DB).Equal("postgres://localhost/mydb")
@@ -235,7 +236,7 @@ func TestRequiredValidation(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{}).
 		HasError("required value not set: --name")
 }
 
@@ -253,7 +254,7 @@ func TestRequiredPassesWhenSet(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--name", "alice"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--name", "alice"}).
 		NoError()
 
 	testingx.Capture(t, cfg.Name).Equal("alice")
@@ -276,7 +277,7 @@ func TestBoolNegation(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--no-color"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--no-color"}).
 		NoError()
 
 	testingx.Capture(t, cfg.Color).Equal(false)
@@ -299,7 +300,7 @@ func TestHiddenCommandExecutes(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"debug"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"debug"}).
 		NoError()
 
 	testingx.Capture(t, called).Equal(true)
@@ -323,7 +324,7 @@ func TestDoubleDashStopsRouting(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--", "child", "extra"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--", "child", "extra"}).
 		NoError()
 
 	testingx.Capture(t, gotArgs).Contains("child")
@@ -353,7 +354,7 @@ func TestCommandStructDirectly(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--name", "Alice"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--name", "Alice"}).
 		NoError()
 
 	testingx.Capture(t, greeting).Equal("Hello, Alice!")
@@ -371,20 +372,20 @@ func TestSourcePriority(t *testing.T) {
 	// Only default.
 	cfg1 := new(Config)
 	cmds1 := Build("app", &Command{Config: cfg1, Command: func(args []string) error { return nil }})
-	testingx.Call(t, cmds1.Execute, []string{}, inject.New()).NoError()
+	testingx.Call(t, cmds1.Execute, []string{}).NoError()
 	testingx.Capture(t, cfg1.Value).Equal("from-default")
 
 	// Env overrides default.
 	t.Setenv("TEST_COMMAND_VALUE", "from-env")
 	cfg2 := new(Config)
 	cmds2 := Build("app", &Command{Config: cfg2, Command: func(args []string) error { return nil }})
-	testingx.Call(t, cmds2.Execute, []string{}, inject.New()).NoError()
+	testingx.Call(t, cmds2.Execute, []string{}).NoError()
 	testingx.Capture(t, cfg2.Value).Equal("from-env")
 
 	// Flag overrides env.
 	cfg3 := new(Config)
 	cmds3 := Build("app", &Command{Config: cfg3, Command: func(args []string) error { return nil }})
-	testingx.Call(t, cmds3.Execute, []string{"--value", "from-flag"}, inject.New()).NoError()
+	testingx.Call(t, cmds3.Execute, []string{"--value", "from-flag"}).NoError()
 	testingx.Capture(t, cfg3.Value).Equal("from-flag")
 }
 
@@ -394,7 +395,7 @@ func TestEmptyArgs(t *testing.T) {
 		"": "root description",
 	})
 
-	testingx.Call(t, cmds.Execute, []string{}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{}).
 		NoError()
 }
 
@@ -408,7 +409,7 @@ func TestStructWithInterfaces(t *testing.T) {
 		"": cfg,
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--message", "hi"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--message", "hi"}).
 		NoError()
 
 	testingx.Capture(t, cfg.Message).Equal("hi")
@@ -429,7 +430,7 @@ func TestUnmatchedArgsPassThrough(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"foo", "bar"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"foo", "bar"}).
 		NoError()
 
 	testingx.Capture(t, gotArgs).Equal([]string{"foo", "bar"})
@@ -458,7 +459,7 @@ func TestFlagsWithSubcommands(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"greet", "--name", "Alice"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"greet", "--name", "Alice"}).
 		NoError()
 
 	testingx.Capture(t, called).Equal(true)
@@ -488,7 +489,7 @@ func TestHelpFlag(t *testing.T) {
 			"run": "Run something",
 		}, opts)
 
-		testingx.Call(t, cmds.Execute, []string{"--help"}, inject.New()).
+		testingx.Call(t, cmds.Execute, []string{"--help"}).
 			NoError()
 	})
 
@@ -517,7 +518,7 @@ func TestHelpArg(t *testing.T) {
 			"run": "Run something",
 		}, opts)
 
-		testingx.Call(t, cmds.Execute, []string{"help"}, inject.New()).
+		testingx.Call(t, cmds.Execute, []string{"help"}).
 			NoError()
 	})
 
@@ -557,7 +558,7 @@ func TestHelpShowsConfigFlags(t *testing.T) {
 			},
 		}, opts)
 
-		testingx.Call(t, cmds.Execute, []string{"--help"}, inject.New()).
+		testingx.Call(t, cmds.Execute, []string{"--help"}).
 			NoError()
 	})
 
@@ -575,7 +576,7 @@ func TestVersionFlag(t *testing.T) {
 			"": "My CLI tool",
 		}, opts, Version("1.2.3"))
 
-		testingx.Call(t, cmds.Execute, []string{"--version"}, inject.New()).
+		testingx.Call(t, cmds.Execute, []string{"--version"}).
 			NoError()
 	})
 
@@ -589,7 +590,7 @@ func TestVersionArg(t *testing.T) {
 			"": "My CLI tool",
 		}, opts, Version("1.2.3"))
 
-		testingx.Call(t, cmds.Execute, []string{"version"}, inject.New()).
+		testingx.Call(t, cmds.Execute, []string{"version"}).
 			NoError()
 	})
 
@@ -610,7 +611,7 @@ func TestVersionOnlyAtRoot(t *testing.T) {
 		}, opts, Version("1.2.3"))
 		cmds.Err = cmds.Out
 
-		err := testingx.CallAs[error](t, cmds.Execute, []string{"child", "--version"}, inject.New()).
+		err := testingx.CallAs[error](t, cmds.Execute, []string{"child", "--version"}).
 			Capture()
 		testingx.Call(t, cmds.FormatErrors, err).NoError()
 	})
@@ -632,7 +633,7 @@ func TestHelpOmitsHiddenCommands(t *testing.T) {
 			},
 		}, opts)
 
-		testingx.Call(t, cmds.Execute, []string{"--help"}, inject.New()).
+		testingx.Call(t, cmds.Execute, []string{"--help"}).
 			NoError()
 	})
 
@@ -650,8 +651,7 @@ func TestUnknownCommandSuggestion(t *testing.T) {
 		}, opts)
 		cmds.Err = cmds.Out
 
-		err := testingx.CallAs[error](t, cmds.Execute, []string{"destory"}, inject.New()). // nolint misspell
-													Capture()
+		err := testingx.CallAs[error](t, cmds.Execute, []string{"destory"}).Capture() // nolint misspell
 		testingx.Call(t, cmds.FormatErrors, err).NoError()
 	})
 
@@ -668,7 +668,7 @@ func TestUnknownCommandNoSuggestion(t *testing.T) {
 		}, opts)
 		cmds.Err = cmds.Out
 
-		err := testingx.CallAs[error](t, cmds.Execute, []string{"xyz"}, inject.New()).
+		err := testingx.CallAs[error](t, cmds.Execute, []string{"xyz"}).
 			Capture()
 		testingx.Call(t, cmds.FormatErrors, err).NoError()
 	})
@@ -692,8 +692,7 @@ func TestUnknownFlagSuggestion(t *testing.T) {
 		}, opts)
 		cmds.Err = cmds.Out
 
-		err := testingx.CallAs[error](t, cmds.Execute, []string{"--destory"}, inject.New()). // nolint misspell
-													Capture()
+		err := testingx.CallAs[error](t, cmds.Execute, []string{"--destory"}).Capture() // nolint misspell
 		testingx.Call(t, cmds.FormatErrors, err).NoError()
 	})
 
@@ -716,7 +715,7 @@ func TestUnknownFlagNoSuggestion(t *testing.T) {
 		}, opts)
 		cmds.Err = cmds.Out
 
-		err := testingx.CallAs[error](t, cmds.Execute, []string{"--xyz", "value"}, inject.New()).
+		err := testingx.CallAs[error](t, cmds.Execute, []string{"--xyz", "value"}).
 			Capture()
 		testingx.Call(t, cmds.FormatErrors, err).NoError()
 	})
@@ -745,7 +744,7 @@ func TestValidFlagsNoError(t *testing.T) {
 		},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"--name", "alice", "--port", "3000"}, inject.New()).
+	testingx.Call(t, cmds.Execute, []string{"--name", "alice", "--port", "3000"}).
 		NoError()
 
 	testingx.Capture(t, called).Equal(true)
@@ -770,11 +769,13 @@ func TestReservedCompleteCommand(t *testing.T) {
 	})
 }
 
-func TestNilInjector(t *testing.T) {
+// A program that wires nothing up supplies no Injector option, and the inject
+// source is filled in with an empty one.
+func TestNoInjector(t *testing.T) {
 	cmds := Build("app", map[string]interface{}{
 		"": func(args []string) error { return nil },
 	})
-	testingx.Call(t, cmds.Execute, []string{}, nil).NoError()
+	testingx.Call(t, cmds.Execute, []string{}).NoError()
 }
 
 func TestWithChildren_Routing(t *testing.T) {
@@ -783,8 +784,8 @@ func TestWithChildren_Routing(t *testing.T) {
 		"db": &dbCommands{},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"db", "migrate"}, inject.New()).NoError()
-	testingx.Call(t, cmds.Execute, []string{"db", "seed"}, inject.New()).NoError()
+	testingx.Call(t, cmds.Execute, []string{"db", "migrate"}).NoError()
+	testingx.Call(t, cmds.Execute, []string{"db", "seed"}).NoError()
 }
 
 func TestWithChildren_UnknownChild(t *testing.T) {
@@ -793,7 +794,7 @@ func TestWithChildren_UnknownChild(t *testing.T) {
 		"db": &dbCommands{},
 	})
 
-	testingx.Call(t, cmds.Execute, []string{"db", "unknown"}, inject.New()).Error()
+	testingx.Call(t, cmds.Execute, []string{"db", "unknown"}).Error()
 }
 
 // greetCommand is a test helper that implements the interface-based approach.
@@ -809,4 +810,72 @@ func (c *greetCommand) Description() string {
 func (c *greetCommand) Execute(args []string) error {
 	c.executed = true
 	return nil
+}
+
+// --- Registered modules: flags and env vars a module brings along ---
+//
+// A module registered on the injector is not reachable from the command's own
+// config struct, so Find does not walk it. Its flags and environment variables
+// still have to show up in help, completion and man pages, and still have to be
+// accepted rather than rejected as unknown.
+type dbModule struct {
+	Host string `flag:"db-host" env:"DB_HOST" default:"localhost" usage:"Database host"`
+}
+
+func (m *dbModule) Install(s *inject.Source) error {
+	s.Bind(m.Host, "database-url")
+	return nil
+}
+
+func TestRegisteredModule_FlagInHelp(t *testing.T) {
+	injector := inject.New()
+	injector.Register(&dbModule{})
+
+	output := capture(t, func(opts OptionsFn) {
+		cmds := Build("app", map[string]interface{}{
+			"": "My CLI tool",
+		}, Injector(injector), opts)
+
+		testingx.Call(t, cmds.Execute, []string{"--help"}).NoError()
+	})
+
+	help := testingx.Capture(t, output)
+	help.Contains("--db-host")
+	help.Contains("Database host")
+	help.Contains(`(default: "localhost")`)
+}
+
+func TestRegisteredModule_FlagAccepted(t *testing.T) {
+	injector := inject.New()
+	injector.Register(&dbModule{})
+
+	cmds := Build("app", map[string]interface{}{
+		"": func(args []string) error { return nil },
+	}, Injector(injector))
+
+	testingx.Call(t, cmds.Execute, []string{"--db-host", "example.com"}).NoError()
+}
+
+// The module's fields belong to every command, so they are documented on every
+// page: the subcommand accepts --db-host exactly as the root does.
+func TestRegisteredModule_InManPages(t *testing.T) {
+	injector := inject.New()
+	injector.Register(&dbModule{})
+
+	cmds := Build("app", map[string]interface{}{
+		"":     "My CLI tool",
+		"sync": "Sync something",
+	}, Injector(injector))
+
+	dir := t.TempDir()
+	testingx.Call(t, cmds.ManPageTree, dir).NoError()
+
+	for _, name := range []string{"app.1", "app-sync.1"} {
+		content := testingx.CallAs[[]byte](t, os.ReadFile, filepath.Join(dir, name)).NoError().Capture()
+
+		page := testingx.Capture(t, string(content))
+		page.Contains("db\\-host")
+		page.Contains("Database host")
+		page.Contains("DB_HOST")
+	}
 }

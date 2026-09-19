@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/pasataleo/go-config/pkg/config"
 )
 
 const manCommand = "__man"
@@ -18,18 +20,20 @@ func (commands *Commands) ManPageTree(dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
-	return writeManPages(dir, commands.Command, commands.Root, commands.Version, time.Now(), configMetadata(commands.Root.Config))
+	return writeManPages(dir, commands.Command, commands.Root, commands.Version, time.Now(), commands.docConfig())
 }
 
-func writeManPages(dir, prefix string, cmd *Command, version string, date time.Time, found map[string]map[string]interface{}) error {
-	content := manPage(prefix, cmd, version, date, found)
+// writeManPages takes the config rather than a prepared map so that every
+// command in the tree derives its own metadata the same way, modules included.
+func writeManPages(dir, prefix string, cmd *Command, version string, date time.Time, cfg *config.Config) error {
+	content := manPage(prefix, cmd, version, date, findAll(cfg, cmd.Config))
 	path := filepath.Join(dir, prefix+".1")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		return err
 	}
 	for name, child := range cmd.Children {
 		if !child.Hidden {
-			if err := writeManPages(dir, prefix+"-"+name, child, version, date, configMetadata(child.Config)); err != nil {
+			if err := writeManPages(dir, prefix+"-"+name, child, version, date, cfg); err != nil {
 				return err
 			}
 		}

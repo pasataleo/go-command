@@ -1,6 +1,7 @@
 package command
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -41,11 +42,23 @@ func Version(v string) OptionsFn {
 	}
 }
 
+// Injector sets the injector that inject tags are resolved against. It belongs
+// to the Commands rather than to a call, so that documentation generated
+// without running anything - ManPageTree - describes the same flags and
+// environment variables that Execute would accept, modules included.
+func Injector(injector *inject.Source) OptionsFn {
+	return func(commands *Commands) {
+		commands.Injector = injector
+	}
+}
+
 type Commands struct {
 	Command string
 	Root    *Command
 
 	Version string
+
+	Injector *inject.Source
 
 	Out *os.File
 	Err *os.File
@@ -65,7 +78,7 @@ func Build(command string, commands interface{}, opts ...OptionsFn) *Commands {
 	return cmd
 }
 
-func (commands *Commands) Execute(args []string, injector *inject.Source) error {
+func (commands *Commands) Execute(args []string) error {
 	// Scan for __complete before flags.Parse so a partial flag-like word isn't
 	// consumed. Everything before __complete is the navigation path; the one
 	// word after it (if any) is the partial word being typed.
@@ -105,12 +118,9 @@ func (commands *Commands) Execute(args []string, injector *inject.Source) error 
 		command = next
 	}
 
-	cfg := config.New(commands.defaultSources(injector, flagsSource)...)
+	cfg := config.New(commands.defaultSources(flagsSource)...)
 
-	var found map[string]map[string]interface{}
-	if command.Config != nil {
-		found = cfg.Find(command.Config)
-	}
+	found := findAll(cfg, command.Config)
 
 	if isComplete {
 		for _, c := range commands.complete(command, completionCurrent, found) {
@@ -119,34 +129,18 @@ func (commands *Commands) Execute(args []string, injector *inject.Source) error 
 		return nil
 	}
 
-	if command.Config != nil {
-		knownFlags := config.FilterBySource[flags.Flag](found, "flags")
-		unclaimedFlags := flagsSource.Validate(knownFlags)
-		if len(unclaimedFlags) > 0 {
-			var err error
-			for unclaimedFlag, suggestion := range unclaimedFlags {
-				if unclaimedFlag == "help" || (unclaimedFlag == "version" && command == commands.Root) {
-					continue
-				}
-				err = errorsx.Append(err, unknownFlag(unclaimedFlag, suggestion))
+	knownFlags := config.FilterBySource[flags.Flag](found, "flags")
+	unclaimedFlags := flagsSource.Validate(knownFlags)
+	if len(unclaimedFlags) > 0 {
+		var err error
+		for unclaimedFlag, suggestion := range unclaimedFlags {
+			if unclaimedFlag == "help" || (unclaimedFlag == "version" && command == commands.Root) {
+				continue
 			}
-			if err != nil {
-				return err
-			}
+			err = errorsx.Append(err, unknownFlag(unclaimedFlag, suggestion))
 		}
-	} else {
-		unclaimedFlags := flagsSource.Validate(nil)
-		if len(unclaimedFlags) > 0 {
-			var err error
-			for unclaimedFlag, suggestion := range unclaimedFlags {
-				if unclaimedFlag == "help" || (unclaimedFlag == "version" && command == commands.Root) {
-					continue
-				}
-				err = errorsx.Append(err, unknownFlag(unclaimedFlag, suggestion))
-			}
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
 		}
 	}
 
@@ -182,7 +176,7 @@ func (commands *Commands) Execute(args []string, injector *inject.Source) error 
 		if err := os.MkdirAll(args[1], 0755); err != nil {
 			return err
 		}
-		return writeManPages(args[1], commands.Command, commands.Root, commands.Version, time.Now(), found)
+		return writeManPages(args[1], commands.Command, commands.Root, commands.Version, time.Now(), cfg)
 	}
 
 	if command.Command != nil {
@@ -197,19 +191,57 @@ func (commands *Commands) Execute(args []string, injector *inject.Source) error 
 	return nil
 }
 
-func (commands *Commands) defaultSources(injector *inject.Source, flags *flags.Source) []config.Source {
-	if injector == nil {
-		injector = inject.New()
-	}
+func (commands *Commands) defaultSources(flags *flags.Source) []config.Source {
 	return []config.Source{
 		flags,
 		new(env.Source),
-		injector,
+		commands.injector(),
 		new(hidden.Source),
 		new(usage.Source),
 		new(defaults.Source),
 		new(required.Source),
 	}
+}
+
+// injector returns the injector Build was given, or an empty one. The inject
+// source is always in the list, so it has to be non-nil even when the program
+// wires nothing up.
+func (commands *Commands) injector() *inject.Source {
+	if commands.Injector != nil {
+		return commands.Injector
+	}
+	return inject.New()
+}
+
+// docConfig builds the sources Execute would, with an empty flag source, to
+// report what the commands accept without running anything. Find reads struct
+// tags rather than parsed values, and it never calls Start and never opens a
+// scope, so no module is installed and nothing is bound.
+func (commands *Commands) docConfig() *config.Config {
+	return config.New(commands.defaultSources(new(flags.Source))...)
+}
+
+// findAll collects the metadata for a command's own config struct together with
+// the structs the sources bring along themselves - the modules registered on the
+// injector, which carry flags and environment variables of their own but which
+// nothing the caller owns points at. Find does not walk those, so help text,
+// completion, man pages and flag validation would all miss them.
+func findAll(cfg *config.Config, target interface{}) map[string]map[string]interface{} {
+	found := make(map[string]map[string]interface{})
+	merge := func(m map[string]map[string]interface{}, prefix string) {
+		for path, sources := range m {
+			found[prefix+path] = sources
+		}
+	}
+	if target != nil {
+		merge(cfg.Find(target), "")
+	}
+	for i, target := range cfg.AdditionalTargets() {
+		// Paths are relative to each target's own root, so they can collide
+		// across targets. Only the values are ever read, never the key.
+		merge(cfg.Find(target), fmt.Sprintf("%d\x00", i))
+	}
+	return found
 }
 
 func parseCommands(name string, next interface{}) *Command {

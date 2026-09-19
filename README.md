@@ -35,8 +35,7 @@ func main() {
         },
     }, command.Version("0.1.0"))
 
-    // Pass nil as the injector if no dependency injection is needed.
-    if err := cmds.Execute(os.Args[1:], nil); err != nil {
+    if err := cmds.Execute(os.Args[1:]); err != nil {
         if err = cmds.FormatErrors(err); err != nil {
             fmt.Fprintln(os.Stderr, err)
         }
@@ -151,6 +150,45 @@ Bool flags with a `true` default can be negated with `--no-<flag>`:
 myapp --no-color
 ```
 
+## Dependency injection
+
+Fields tagged `inject` are populated from an `*inject.Source`, supplied once with the `Injector` option:
+
+```go
+injector := inject.New()
+injector.Bind("postgres://localhost/mydb", "database-url")
+
+cmds := command.Build("app", tree, command.Injector(injector))
+
+type Config struct {
+    DB string `inject:"database-url"`
+}
+```
+
+A program that injects nothing omits the option.
+
+### Modules
+
+A module registered on the injector is a struct that configures itself and then binds what it built. Its own fields are populated like any other config struct, so it can carry flags and environment variables of its own:
+
+```go
+type DatabaseModule struct {
+    Host string `flag:"db-host" env:"DB_HOST" default:"localhost" usage:"Database host"`
+}
+
+func (m *DatabaseModule) Install(s *inject.Source) error {
+    s.Bind(openDB(m.Host), "database")
+    return nil
+}
+
+injector := inject.New()
+injector.Register(&DatabaseModule{})
+```
+
+Registered modules are wiring for the whole program rather than for one command, so `--db-host` is accepted by every command and documented on every help page and man page — nothing in the command tree has to point at the module for that to happen.
+
+Because the injector is what knows about the modules, `ManPageTree` needs the `Injector` option to document them; generating pages from a `Commands` built without it will describe only the commands' own config structs.
+
 ## Subcommands
 
 Nest `map[string]interface{}` to create subcommand trees:
@@ -215,15 +253,20 @@ command.Build("app", tree,
     command.Version("1.0.0"),
     command.StdOut(os.Stdout),
     command.StdErr(os.Stderr),
+    command.Injector(injector),
 )
 ```
+
+- `Version` — version string for `version` / `--version`
+- `StdOut` / `StdErr` — where output is written; both default to the process streams
+- `Injector` — the `*inject.Source` to resolve `inject` tags against (see [Dependency injection](#dependency-injection)). Omit it and commands run against an empty injector
 
 ## Error handling
 
 `FormatErrors` formats known error types (unknown commands/flags with "did you mean" suggestions, missing required values) to stderr and returns any remaining unhandled errors:
 
 ```go
-if err := cmds.Execute(os.Args[1:], inject.New()); err != nil {
+if err := cmds.Execute(os.Args[1:]); err != nil {
     if err = cmds.FormatErrors(err); err != nil {
         fmt.Fprintln(os.Stderr, err)
     }
