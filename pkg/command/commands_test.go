@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/pasataleo/go-config/pkg/inject"
+	"github.com/pasataleo/go-errorsx/pkg/errorsx"
 	"github.com/pasataleo/go-testingx/pkg/testingx"
 )
 
@@ -1049,5 +1051,54 @@ func TestFormatErrors_conflictingValues(t *testing.T) {
 	testingx.Capture(t, string(out)).Contains("only one of port, socket can be set")
 	if remaining != nil {
 		t.Errorf("FormatErrors returned %v, want the error handled", remaining)
+	}
+}
+
+// FormatErrors returns every error it does not present itself, whatever its
+// code, so the caller can report it. A command failing with a coded error used
+// to exit with nothing printed at all.
+func TestFormatErrors_returnsOtherErrors(t *testing.T) {
+	tcs := map[string]error{
+		"coded":   errorsx.New(errorsx.NotFound, nil, "no such user"),
+		"uncoded": errors.New("something broke"),
+	}
+	for name, cause := range tcs {
+		t.Run(name, func(t *testing.T) {
+			cmds := Build("app", map[string]interface{}{
+				"": func(args []string) error { return cause },
+			})
+
+			remaining := cmds.FormatErrors(cmds.Execute(nil))
+			testingx.Capture(t, remaining).ErrorContains(cause.Error())
+		})
+	}
+}
+
+// Errors it presents are printed and not returned, while the rest of an
+// aggregate is returned.
+func TestFormatErrors_mixed(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmds := Build("app", map[string]interface{}{
+		"": func(args []string) error { return nil },
+	}, StdErr(w))
+
+	remaining := cmds.FormatErrors(errorsx.Append(
+		errorsx.New(UnknownFlag, nil, "unknown flag: --nme"),
+		errorsx.New(errorsx.Unavailable, nil, "listening on 127.0.0.1:8080"),
+	))
+	w.Close()
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingx.Capture(t, string(out)).Contains("unknown flag: --nme")
+	testingx.Capture(t, remaining).ErrorContains("listening on 127.0.0.1:8080")
+	if strings.Contains(remaining.Error(), "unknown flag") {
+		t.Errorf("FormatErrors returned the error it printed: %v", remaining)
 	}
 }

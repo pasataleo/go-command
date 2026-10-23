@@ -13,6 +13,9 @@ const (
 	UnknownFlag    errorsx.Code = "UnknownFlag"
 )
 
+// FormatErrors prints the errors it knows how to present - invalid, missing
+// and conflicting values, and unknown commands and flags with a suggestion -
+// to stderr, and returns every other error for the caller to report.
 func (commands *Commands) FormatErrors(err error) error {
 	var unknown error
 	for _, err := range errorsx.Errors(err) {
@@ -25,7 +28,7 @@ func (commands *Commands) FormatErrors(err error) error {
 			if suggestion, ok := errorsx.GetAnnotation(err, "suggestion"); ok {
 				commands.EPrintf("did you mean: %s?\n", suggestion)
 			}
-		case errorsx.Unknown:
+		default:
 			unknown = errorsx.Append(unknown, err)
 		}
 	}
