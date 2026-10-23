@@ -13,6 +13,7 @@
 ## BUG FIXES
 
 - A flag belonging to a registered inject module is no longer rejected as an unknown flag. The module's fields were absent from the set of known flags, so passing one failed with `unknown flag` even though the module was there to receive it
+- Help's usage line includes the program name when the tree has no `""` entry at its root, and the name of every group on the way down. A map level without a `""` entry made an unnamed command, so `gw --help` printed `Usage:  [command]` rather than `gw [command]`, and `gw build --help` printed `build` rather than `gw build`. Completion and man pages were unaffected
 
 ## BREAKING CHANGES
 

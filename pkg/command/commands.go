@@ -265,7 +265,7 @@ func parseCommands(name string, next interface{}) *Command {
 			children[k] = parseCommands(k, v)
 		}
 		if command == nil {
-			command = new(Command)
+			command = &Command{Name: name}
 		}
 		for _, child := range children {
 			child.Parent = command

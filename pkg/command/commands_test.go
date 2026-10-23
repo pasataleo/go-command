@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -537,6 +538,45 @@ Flags:
   --help     Display help information (i.e. print this message) (default: "false")
   --version  Display version information (default: "false")
 `)
+}
+
+// --- Help usage line: commands without a "" entry still have their name ---
+//
+// A map level without a "" entry used to get an unnamed command, so the usage
+// line lost the program name, and a group's name was missing from the paths
+// of the commands under it.
+func TestHelpUsageLine(t *testing.T) {
+	tree := map[string]interface{}{
+		"run": "Run something",
+		"db": map[string]interface{}{
+			"migrate": "Migrate the database",
+		},
+	}
+
+	tests := map[string]struct {
+		args []string
+		want string
+	}{
+		"root":       {[]string{"--help"}, "  app [command]"},
+		"subcommand": {[]string{"run", "--help"}, "  app run"},
+		"group":      {[]string{"db", "--help"}, "  app db [command]"},
+		"nested":     {[]string{"db", "migrate", "--help"}, "  app db migrate"},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			output := capture(t, func(opts OptionsFn) {
+				testingx.Call(t, Build("app", tree, opts).Execute, tt.args).
+					NoError()
+			})
+
+			lines := strings.Split(output, "\n")
+			usage := slices.Index(lines, "Usage:")
+			if usage < 0 || usage+1 >= len(lines) {
+				t.Fatalf("no usage line in:\n%s", output)
+			}
+			testingx.Capture(t, lines[usage+1]).Equal(tt.want)
+		})
+	}
 }
 
 // --- Help shows config flags: flags from Config structs appear in help ---
