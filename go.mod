@@ -3,7 +3,7 @@ module github.com/pasataleo/go-command
 go 1.25.7
 
 require (
-	github.com/pasataleo/go-config v0.1.1-0.20260918112643-fad9e990ed22
+	github.com/pasataleo/go-config v0.1.1-0.20261023151310-880d4c36b030
 	github.com/pasataleo/go-errorsx v0.1.0
 	github.com/pasataleo/go-testingx v0.1.0
 )

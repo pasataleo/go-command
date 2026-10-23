@@ -3,12 +3,15 @@
 ## FEATURES
 
 - `Injector` build option, supplying the injector once at `Build` time. Documentation generated from the `Commands` alone - `ManPageTree`, which has no `Execute` call to take an injector from - now knows about the modules the program registered
+- `oneof:"<group>"` groups on required fields, through go-config's `oneof` source, which every command's sources now start with: exactly one name in a group must be set, and groups are global, so a member can sit on a registered module while another is on the command's own config
 
 ## IMPROVEMENTS
 
 - Help text, shell completion and man pages report the flags and environment variables of inject modules registered on the injector, not only those of the command's own config struct. A registered module holds flags and environment variables like any other struct, but nothing the caller owns points at it, so `Find` does not walk it; `config.AdditionalTargets` reports those structs and they are merged into the metadata every command is described from
 - Man pages for subcommands are generated from the same sources as the root page. Each command in the tree was previously re-deriving its metadata from a separate, injector-less source list, so a subcommand's page could differ from the root's for reasons that had nothing to do with the subcommand
 - Flag validation no longer branches on whether the command has a config struct of its own, since a registered module contributes flags either way
+- Help and man pages show a field in a `oneof` group as `(required: one of --port, --socket)`, naming each member by its flag, or its environment variable if it has none, rather than marking each member required on its own
+- `FormatErrors` prints go-config's `ConflictingValues` errors, which a `oneof` group with more than one name set produces, rather than dropping them as an unknown code
 
 ## BUG FIXES
 

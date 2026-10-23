@@ -11,6 +11,7 @@ import (
 	"github.com/pasataleo/go-config/pkg/flags"
 	"github.com/pasataleo/go-config/pkg/hidden"
 	"github.com/pasataleo/go-config/pkg/inject"
+	"github.com/pasataleo/go-config/pkg/oneof"
 	"github.com/pasataleo/go-config/pkg/required"
 	"github.com/pasataleo/go-config/pkg/usage"
 	"github.com/pasataleo/go-errorsx/pkg/errorsx"
@@ -193,6 +194,8 @@ func (commands *Commands) Execute(args []string) error {
 
 func (commands *Commands) defaultSources(flags *flags.Source) []config.Source {
 	return []config.Source{
+		// oneof first, so it sees every field before a source claims it.
+		new(oneof.Source),
 		flags,
 		new(env.Source),
 		commands.injector(),

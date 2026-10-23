@@ -1,7 +1,7 @@
 github.com/pasataleo/go-colour v0.1.0 h1:opkRCqIc7fOmplO8gNbwmAZ/+dePv6HQMcNj7IAxH6I=
 github.com/pasataleo/go-colour v0.1.0/go.mod h1:ICaTBjPeIGf5LB6RpKwGq9NIsUjgf7A/+w0SxWEmYhg=
-github.com/pasataleo/go-config v0.1.1-0.20260918112643-fad9e990ed22 h1:Q75lNkQjnH+4AN34jVuRzklHQnQnExisI++MQGJGClI=
-github.com/pasataleo/go-config v0.1.1-0.20260918112643-fad9e990ed22/go.mod h1:ERcBKpf9LIQ3Dk9GPLC2vm3sS7/JyGQcpmQSNKlu9AM=
+github.com/pasataleo/go-config v0.1.1-0.20261023151310-880d4c36b030 h1:4Hd+qpjWFNng0ommUi85NtpQ0GhkYpxlqXVlc6Vwk3Y=
+github.com/pasataleo/go-config v0.1.1-0.20261023151310-880d4c36b030/go.mod h1:ERcBKpf9LIQ3Dk9GPLC2vm3sS7/JyGQcpmQSNKlu9AM=
 github.com/pasataleo/go-errorsx v0.1.0 h1:BVEDt3fpaa3o4W7lNqm1Mn+SITL64lIQ0ewrDCRyGr4=
 github.com/pasataleo/go-errorsx v0.1.0/go.mod h1:MN0UXEx7Jh3nE68dweYIOP13Qdo3wMNCDKLGTSnjc2Y=
 github.com/pasataleo/go-reflectx v0.1.1-0.20260915155135-b7502891337c h1:cJWqRK59OsTMTGZ1UORUhmz+1JbPp6x7cC5ABwfd3sM=

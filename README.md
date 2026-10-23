@@ -131,6 +131,7 @@ Config structs are populated automatically from multiple sources, in priority or
 Additional tags:
 
 - `required:"--name"` — fail with an error if the value is not set; the tag value is included in the error message
+- `oneof:"<group>"` — on required fields, makes them alternatives: exactly one name in the group must be set. Groups are global, so members can be in different structs or modules. Help and man pages show each member as `(required: one of --port, --socket)`
 - `usage:"description"` — description shown in help output
 - `hidden:""` — hide the field from help output
 
@@ -263,7 +264,7 @@ command.Build("app", tree,
 
 ## Error handling
 
-`FormatErrors` formats known error types (unknown commands/flags with "did you mean" suggestions, missing required values) to stderr and returns any remaining unhandled errors:
+`FormatErrors` formats known error types (unknown commands/flags with "did you mean" suggestions, missing required values, conflicting `oneof` values) to stderr and returns any remaining unhandled errors:
 
 ```go
 if err := cmds.Execute(os.Args[1:]); err != nil {

@@ -919,3 +919,135 @@ func TestRegisteredModule_InManPages(t *testing.T) {
 		page.Contains("DB_HOST")
 	}
 }
+
+// --- oneof: exactly one of a group of required flags ---
+
+type listenConfig struct {
+	Port   int    `flag:"port" required:"port" oneof:"listen" usage:"Port to listen on"`
+	Socket string `flag:"socket" required:"socket" oneof:"listen" usage:"Socket to listen on"`
+}
+
+func TestOneOf(t *testing.T) {
+	tcs := map[string]struct {
+		args    []string
+		wantErr string
+	}{
+		"port":          {args: []string{"--port", "8080"}},
+		"socket":        {args: []string{"--socket", "/tmp/app.sock"}},
+		"port set to 0": {args: []string{"--port", "0"}},
+		"neither":       {wantErr: "required value not set: one of port, socket"},
+		"both": {
+			args:    []string{"--port", "8080", "--socket", "/tmp/app.sock"},
+			wantErr: "only one of port, socket can be set, got port, socket",
+		},
+	}
+	for name, tc := range tcs {
+		t.Run(name, func(t *testing.T) {
+			cmds := Build("app", map[string]interface{}{
+				"": &Command{
+					Config:  new(listenConfig),
+					Command: func(args []string) error { return nil },
+				},
+			})
+
+			if tc.wantErr == "" {
+				testingx.Call(t, cmds.Execute, tc.args).NoError()
+				return
+			}
+			testingx.Call(t, cmds.Execute, tc.args).HasError(tc.wantErr)
+		})
+	}
+}
+
+// portOnlyModule holds one member of a group whose other member is on the
+// command's own config, so the group spans the module's walk and the
+// command's.
+type portOnlyModule struct {
+	Port int `flag:"port" required:"port" oneof:"listen" usage:"Port to listen on"`
+}
+
+func (m *portOnlyModule) Install(*inject.Source) error {
+	return nil
+}
+
+func TestOneOf_acrossModule(t *testing.T) {
+	type Config struct {
+		Socket string `flag:"socket" required:"socket" oneof:"listen" usage:"Socket to listen on"`
+	}
+
+	build := func() *Commands {
+		injector := inject.New()
+		injector.Register(new(portOnlyModule))
+		return Build("app", map[string]interface{}{
+			"": &Command{
+				Config:  new(Config),
+				Command: func(args []string) error { return nil },
+			},
+		}, Injector(injector))
+	}
+
+	testingx.Call(t, build().Execute, []string{"--port", "8080"}).NoError()
+	testingx.Call(t, build().Execute, []string{"--socket", "/tmp/app.sock"}).NoError()
+	testingx.Call(t, build().Execute, []string{}).HasError("required value not set: one of port, socket")
+}
+
+func TestOneOf_help(t *testing.T) {
+	output := capture(t, func(opts OptionsFn) {
+		cmds := Build("app", map[string]interface{}{
+			"": &Command{
+				Config:  new(listenConfig),
+				Command: func(args []string) error { return nil },
+			},
+		}, opts)
+
+		testingx.Call(t, cmds.Execute, []string{"--help"}).NoError()
+	})
+
+	out := testingx.Capture(t, output)
+	out.Contains("--port     Port to listen on (required: one of --port, --socket)")
+	out.Contains("--socket   Socket to listen on (required: one of --port, --socket)")
+}
+
+func TestOneOf_manPage(t *testing.T) {
+	cmds := Build("app", map[string]interface{}{
+		"": &Command{
+			Config:  new(listenConfig),
+			Command: func(args []string) error { return nil },
+		},
+	})
+
+	dir := t.TempDir()
+	testingx.Call(t, cmds.ManPageTree, dir).NoError()
+
+	content := testingx.CallAs[[]byte](t, os.ReadFile, filepath.Join(dir, "app.1")).NoError().Capture()
+	testingx.Capture(t, string(content)).Contains("Port to listen on (required: one of \\-\\-port, \\-\\-socket)")
+}
+
+// FormatErrors prints a conflicting-values error, rather than dropping it as
+// an unknown code.
+func TestFormatErrors_conflictingValues(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmds := Build("app", map[string]interface{}{
+		"": &Command{
+			Config:  new(listenConfig),
+			Command: func(args []string) error { return nil },
+		},
+	}, StdErr(w))
+
+	execErr := cmds.Execute([]string{"--port", "8080", "--socket", "/tmp/app.sock"})
+	remaining := cmds.FormatErrors(execErr)
+	w.Close()
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingx.Capture(t, string(out)).Contains("only one of port, socket can be set")
+	if remaining != nil {
+		t.Errorf("FormatErrors returned %v, want the error handled", remaining)
+	}
+}

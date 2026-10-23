@@ -88,14 +88,15 @@ func (commands *Commands) HelpCommand(command *Command, values map[string]map[st
 	// Flags
 	{
 		type flag struct {
-			usage    string
-			def      string
-			required bool
+			usage       string
+			def         string
+			requirement string
 		}
 
+		required := requirements(values)
 		flagsList := map[string]flag{}
 		maxLen := 0
-		for _, sources := range values {
+		for path, sources := range values {
 			if _, ok := sources["hidden"]; ok {
 				continue
 			}
@@ -110,9 +111,7 @@ func (commands *Commands) HelpCommand(command *Command, values map[string]map[st
 			if d, ok := sources["defaults"].(string); ok {
 				f.def = d
 			}
-			if _, ok := sources["required"].(string); ok {
-				f.required = true
-			}
+			f.requirement = required[path]
 			flagsList[flagValue.Name] = f
 			if len(flagValue.Name) > maxLen {
 				maxLen = len(flagValue.Name)
@@ -159,11 +158,11 @@ func (commands *Commands) HelpCommand(command *Command, values map[string]map[st
 					}
 					desc += fmt.Sprintf("(default: %q)", f.def)
 				}
-				if f.required {
+				if f.requirement != "" {
 					if desc != "" {
 						desc += " "
 					}
-					desc += "(required)"
+					desc += "(" + f.requirement + ")"
 				}
 				if desc != "" {
 					commands.Printf("  --%-*s  %s\n", maxLen, name, desc)

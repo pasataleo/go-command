@@ -101,7 +101,7 @@ func manPage(name string, cmd *Command, version string, date time.Time, found ma
 		for _, flag := range flagList {
 			fmt.Fprintf(&sb, ".TP\n")
 			fmt.Fprintf(&sb, "\\fB\\-\\-%s\\fR\n", roffEscape(flag.name))
-			desc := manAnnotate(flag.desc, flag.def, flag.required)
+			desc := manAnnotate(flag.desc, flag.def, flag.requirement)
 			if desc != "" {
 				fmt.Fprintf(&sb, "%s\n", roffEscape(desc))
 			}
@@ -115,7 +115,7 @@ func manPage(name string, cmd *Command, version string, date time.Time, found ma
 		for _, ev := range envVars {
 			fmt.Fprintf(&sb, ".TP\n")
 			fmt.Fprintf(&sb, "\\fB%s\\fR\n", roffEscape(ev.name))
-			desc := manAnnotate(ev.desc, ev.def, ev.required)
+			desc := manAnnotate(ev.desc, ev.def, ev.requirement)
 			if desc != "" {
 				fmt.Fprintf(&sb, "%s\n", roffEscape(desc))
 			}
@@ -125,18 +125,18 @@ func manPage(name string, cmd *Command, version string, date time.Time, found ma
 	return sb.String()
 }
 
-func manAnnotate(desc, def string, required bool) string {
+func manAnnotate(desc, def, requirement string) string {
 	if def != "" {
 		if desc != "" {
 			desc += " "
 		}
 		desc += fmt.Sprintf("(default: %q)", def)
 	}
-	if required {
+	if requirement != "" {
 		if desc != "" {
 			desc += " "
 		}
-		desc += "(required)"
+		desc += "(" + requirement + ")"
 	}
 	return desc
 }

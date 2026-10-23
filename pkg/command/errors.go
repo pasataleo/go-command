@@ -17,7 +17,7 @@ func (commands *Commands) FormatErrors(err error) error {
 	var unknown error
 	for _, err := range errorsx.Errors(err) {
 		switch code := errorsx.ErrorCode(err); code {
-		case config.InvalidValue, config.MissingValue:
+		case config.InvalidValue, config.MissingValue, config.ConflictingValues:
 			// these should have been properly formatted already by the config package
 			commands.EPrintln(err)
 		case UnknownCommand, UnknownFlag:

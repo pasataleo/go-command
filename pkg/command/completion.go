@@ -116,22 +116,23 @@ complete -c %s -f -a "(%s)"
 // -- metadata collection --
 
 type completionFlag struct {
-	name     string
-	desc     string
-	def      string
-	required bool
+	name        string
+	desc        string
+	def         string
+	requirement string
 }
 
 type completionEnvVar struct {
-	name     string
-	desc     string
-	def      string
-	required bool
+	name        string
+	desc        string
+	def         string
+	requirement string
 }
 
 func collectCompletionFlags(meta map[string]map[string]interface{}) []completionFlag {
 	var result []completionFlag
-	for _, sources := range meta {
+	required := requirements(meta)
+	for path, sources := range meta {
 		if sources["hidden"] != nil {
 			continue
 		}
@@ -141,8 +142,7 @@ func collectCompletionFlags(meta map[string]map[string]interface{}) []completion
 		}
 		desc, _ := sources["usage"].(string)
 		def, _ := sources["defaults"].(string)
-		_, req := sources["required"]
-		result = append(result, completionFlag{name: flagValue.Name, desc: desc, def: def, required: req})
+		result = append(result, completionFlag{name: flagValue.Name, desc: desc, def: def, requirement: required[path]})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].name < result[j].name
@@ -152,7 +152,8 @@ func collectCompletionFlags(meta map[string]map[string]interface{}) []completion
 
 func collectCompletionEnvVars(meta map[string]map[string]interface{}) []completionEnvVar {
 	var result []completionEnvVar
-	for _, sources := range meta {
+	required := requirements(meta)
+	for path, sources := range meta {
 		if sources["hidden"] != nil {
 			continue
 		}
@@ -162,8 +163,7 @@ func collectCompletionEnvVars(meta map[string]map[string]interface{}) []completi
 		}
 		desc, _ := sources["usage"].(string)
 		def, _ := sources["defaults"].(string)
-		_, req := sources["required"]
-		result = append(result, completionEnvVar{name: envName, desc: desc, def: def, required: req})
+		result = append(result, completionEnvVar{name: envName, desc: desc, def: def, requirement: required[path]})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].name < result[j].name
