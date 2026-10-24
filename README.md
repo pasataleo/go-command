@@ -151,6 +151,42 @@ Bool flags with a `true` default can be negated with `--no-<flag>`:
 myapp --no-color
 ```
 
+### Flags beyond the config
+
+A command can accept flags its config does not declare, for flags that depend on something only known at run time. It
+implements `WithUnclaimedFlags`: instead of being rejected, the flags no config field claims are handed to it, once its
+config is assigned and before it runs. It returns the names it does not recognise, and those are reported as unknown
+flags, with a suggestion. `WithFlagDocs` documents the flags it accepts, so help, completion and man pages list them.
+A `FlagDoc` is how any flag is documented — name, type, usage, default and requirement — and for these flags the
+default and requirement are documentation only, since the command applies them itself.
+
+```go
+type greet struct {
+    Verbose bool `flag:"verbose"`
+}
+
+func (g *greet) FlagDocs() []command.FlagDoc {
+    return []command.FlagDoc{
+        {Flag: flags.Flag{Name: "name", Type: reflect.TypeFor[string]()}, Usage: "Who to greet"},
+    }
+}
+
+func (g *greet) UnclaimedFlags(given map[string][]string) ([]string, error) {
+    var unknown []string
+    for name, values := range given {
+        if name != "name" {
+            unknown = append(unknown, name)
+            continue
+        }
+        g.name = values[len(values)-1]
+    }
+    return unknown, nil
+}
+```
+
+Every other command still rejects any flag its config does not claim. `Command` has the same as fields:
+`UnclaimedFlags` and `FlagDocs`, which needs `UnclaimedFlags` to receive what it documents.
+
 ## Dependency injection
 
 Fields tagged `inject` are populated from an `*inject.Source`, supplied once with the `Injector` option:

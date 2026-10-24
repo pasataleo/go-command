@@ -6,10 +6,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/pasataleo/go-config/pkg/flags"
 	"github.com/pasataleo/go-config/pkg/inject"
 	"github.com/pasataleo/go-errorsx/pkg/errorsx"
 	"github.com/pasataleo/go-testingx/pkg/testingx"
@@ -1101,4 +1103,174 @@ func TestFormatErrors_mixed(t *testing.T) {
 	if strings.Contains(remaining.Error(), "unknown flag") {
 		t.Errorf("FormatErrors returned the error it printed: %v", remaining)
 	}
+}
+
+// --- Unclaimed flags: a command can take flags beyond its config ---
+
+// requestCommand takes request fields as flags beyond its config, the way a
+// command built from a method does: they are not config fields, so it
+// documents them and receives them itself.
+type requestCommand struct {
+	Verbose bool `flag:"verbose" usage:"Print more"`
+
+	received    map[string][]string
+	sawVerbose  bool
+	ran         bool
+	failWith    error
+	rejectNames []string
+}
+
+func (c *requestCommand) Execute([]string) error {
+	c.ran = true
+	return nil
+}
+
+func (c *requestCommand) FlagDocs() []FlagDoc {
+	return []FlagDoc{
+		{Flag: flags.Flag{Name: "name", Type: reflect.TypeFor[string]()}, Usage: "Who to greet"},
+		{Flag: flags.Flag{Name: "address.city", Type: reflect.TypeFor[string]()}, Usage: "Where they live"},
+		{Flag: flags.Flag{Name: "loud", Type: reflect.TypeFor[bool]()}, Usage: "Shout"},
+	}
+}
+
+func (c *requestCommand) UnclaimedFlags(flags map[string][]string) ([]string, error) {
+	c.received = flags
+	c.sawVerbose = c.Verbose
+	if c.failWith != nil {
+		return nil, c.failWith
+	}
+	return c.rejectNames, nil
+}
+
+func TestUnclaimedFlags_received(t *testing.T) {
+	cmd := new(requestCommand)
+	cmds := Build("app", map[string]interface{}{"greet": cmd})
+
+	testingx.Call(t, cmds.Execute, []string{"greet", "--verbose", "--name", "world", "--address.city", "London", "--address.city", "Paris", "--no-loud"}).
+		NoError()
+
+	testingx.Capture(t, cmd.received).Equal(map[string][]string{
+		"name":         {"world"},
+		"address.city": {"London", "Paris"},
+		"no-loud":      {""},
+	})
+	// The config is assigned before the command sees its unclaimed flags.
+	testingx.Capture(t, cmd.sawVerbose).True()
+	testingx.Capture(t, cmd.ran).True()
+}
+
+func TestUnclaimedFlags_unknownNamesReported(t *testing.T) {
+	cmd := &requestCommand{rejectNames: []string{"nme"}}
+	cmds := Build("app", map[string]interface{}{"greet": cmd})
+
+	err := cmds.Execute([]string{"greet", "--nme", "world"})
+	testingx.Capture(t, errorsx.ErrorCode(err)).Equal(UnknownFlag)
+	testingx.Capture(t, err).ErrorContains("unknown flag: nme")
+
+	suggestion, _ := errorsx.GetAnnotation(err, "suggestion")
+	testingx.Capture(t, suggestion).Equal(any("name"))
+	testingx.Capture(t, cmd.ran).False()
+}
+
+func TestUnclaimedFlags_errorStopsCommand(t *testing.T) {
+	cmd := &requestCommand{failWith: errorsx.New(errorsx.InvalidArgument, nil, "--name must not be empty")}
+	cmds := Build("app", map[string]interface{}{"greet": cmd})
+
+	err := cmds.Execute([]string{"greet", "--name", ""})
+	testingx.Capture(t, errorsx.ErrorCode(err)).Equal(errorsx.InvalidArgument)
+	testingx.Capture(t, cmd.ran).False()
+}
+
+func TestUnclaimedFlags_commandFields(t *testing.T) {
+	var received map[string][]string
+	cmds := Build("app", map[string]interface{}{
+		"greet": &Command{
+			FlagDocs: []FlagDoc{{Flag: flags.Flag{Name: "name", Type: reflect.TypeFor[string]()}}},
+			UnclaimedFlags: func(flags map[string][]string) ([]string, error) {
+				received = flags
+				return nil, nil
+			},
+			Command: func([]string) error { return nil },
+		},
+	})
+
+	testingx.Call(t, cmds.Execute, []string{"greet", "--name", "world"}).NoError()
+	testingx.Capture(t, received).Equal(map[string][]string{"name": {"world"}})
+}
+
+// A command without UnclaimedFlags is as strict as it always was.
+func TestUnclaimedFlags_strictWithout(t *testing.T) {
+	type Config struct {
+		Name string `flag:"name"`
+	}
+	cmds := Build("app", map[string]interface{}{
+		"greet": &Command{Config: new(Config), Command: func([]string) error { return nil }},
+	})
+
+	err := cmds.Execute([]string{"greet", "--nme", "world"})
+	testingx.Capture(t, errorsx.ErrorCode(err)).Equal(UnknownFlag)
+}
+
+func TestFlagDocs_withoutUnclaimedFlagsPanics(t *testing.T) {
+	testingx.Panics(t, nil, func() {
+		Build("app", map[string]interface{}{
+			"greet": &Command{
+				FlagDocs: []FlagDoc{{Flag: flags.Flag{Name: "name", Type: reflect.TypeFor[string]()}}},
+				Command:  func([]string) error { return nil },
+			},
+		})
+	})
+}
+
+func TestFlagDocs_inHelpCompletionAndMan(t *testing.T) {
+	help := capture(t, func(opts OptionsFn) {
+		cmds := Build("app", map[string]interface{}{"greet": new(requestCommand)}, opts)
+		testingx.Call(t, cmds.Execute, []string{"greet", "--help"}).NoError()
+	})
+	out := testingx.Capture(t, help)
+	out.Contains("--name          Who to greet")
+	out.Contains("--address.city  Where they live")
+	out.Contains("--loud          Shout")
+	out.Contains("--verbose       Print more")
+
+	completion := capture(t, func(opts OptionsFn) {
+		cmds := Build("app", map[string]interface{}{"greet": new(requestCommand)}, opts)
+		testingx.Call(t, cmds.Execute, []string{"greet", "__complete", "--"}).NoError()
+	})
+	testingx.Capture(t, completion).Contains("--address.city")
+
+	dir := t.TempDir()
+	cmds := Build("app", map[string]interface{}{"greet": new(requestCommand)})
+	testingx.Call(t, cmds.ManPageTree, dir).NoError()
+	page := testingx.CallAs[[]byte](t, os.ReadFile, filepath.Join(dir, "app-greet.1")).NoError().Capture()
+	testingx.Capture(t, string(page)).Contains("Who to greet")
+}
+
+// A documented flag's default and requirement are shown the way a config
+// flag's are.
+func TestFlagDocs_defaultAndRequirement(t *testing.T) {
+	build := func(opts ...OptionsFn) *Commands {
+		return Build("app", map[string]interface{}{
+			"greet": &Command{
+				FlagDocs: []FlagDoc{
+					{Flag: flags.Flag{Name: "name", Type: reflect.TypeFor[string]()}, Usage: "Who to greet", Default: "world"},
+					{Flag: flags.Flag{Name: "id", Type: reflect.TypeFor[int]()}, Usage: "Which one", Requirement: "required"},
+				},
+				UnclaimedFlags: func(map[string][]string) ([]string, error) { return nil, nil },
+				Command:        func([]string) error { return nil },
+			},
+		}, opts...)
+	}
+
+	help := capture(t, func(opts OptionsFn) {
+		testingx.Call(t, build(opts).Execute, []string{"greet", "--help"}).NoError()
+	})
+	out := testingx.Capture(t, help)
+	out.Contains(`--name  Who to greet (default: "world")`)
+	out.Contains(`--id    Which one (required)`)
+
+	dir := t.TempDir()
+	testingx.Call(t, build().ManPageTree, dir).NoError()
+	page := testingx.CallAs[[]byte](t, os.ReadFile, filepath.Join(dir, "app-greet.1")).NoError().Capture()
+	testingx.Capture(t, string(page)).Contains("Which one (required)")
 }

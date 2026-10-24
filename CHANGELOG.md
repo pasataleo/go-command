@@ -4,6 +4,8 @@
 
 - `Injector` build option, so man pages generated without an `Execute` call know about registered modules.
 - `oneof` groups on required fields, through go-config's `oneof` source.
+- `WithUnclaimedFlags` lets a command receive flags its config does not claim.
+- `WithFlagDocs` documents those flags in help, completion and man pages.
 
 ## IMPROVEMENTS
 

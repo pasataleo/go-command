@@ -87,57 +87,31 @@ func (commands *Commands) HelpCommand(command *Command, values map[string]map[st
 
 	// Flags
 	{
-		type flag struct {
-			usage       string
-			def         string
-			requirement string
-		}
-
-		required := requirements(values)
-		flagsList := map[string]flag{}
+		flagsList := map[string]FlagDoc{}
 		maxLen := 0
-		for path, sources := range values {
-			if _, ok := sources["hidden"]; ok {
-				continue
-			}
-			flagValue, ok := sources["flags"].(flags.Flag)
-			if !ok {
-				continue
-			}
-			f := flag{}
-			if u, ok := sources["usage"].(string); ok {
-				f.usage = u
-			}
-			if d, ok := sources["defaults"].(string); ok {
-				f.def = d
-			}
-			f.requirement = required[path]
-			flagsList[flagValue.Name] = f
-			if len(flagValue.Name) > maxLen {
-				maxLen = len(flagValue.Name)
-			}
+		for _, flag := range collectFlags(values, command.FlagDocs) {
+			flagsList[flag.Name] = flag
+			maxLen = max(maxLen, len(flag.Name))
 		}
 
 		if command == commands.Root {
 			if _, ok := flagsList[versionCommand]; !ok {
-				flagsList[versionCommand] = flag{
-					usage: "Display version information",
-					def:   "false",
+				flagsList[versionCommand] = FlagDoc{
+					Flag:    flags.Flag{Name: versionCommand},
+					Usage:   "Display version information",
+					Default: "false",
 				}
-				if len(versionCommand) > maxLen {
-					maxLen = len(versionCommand)
-				}
+				maxLen = max(maxLen, len(versionCommand))
 			}
 		}
 
 		if _, ok := flagsList[helpCommand]; !ok {
-			flagsList[helpCommand] = flag{
-				usage: "Display help information (i.e. print this message)",
-				def:   "false",
+			flagsList[helpCommand] = FlagDoc{
+				Flag:    flags.Flag{Name: helpCommand},
+				Usage:   "Display help information (i.e. print this message)",
+				Default: "false",
 			}
-			if len(helpCommand) > maxLen {
-				maxLen = len(helpCommand)
-			}
+			maxLen = max(maxLen, len(helpCommand))
 		}
 
 		if len(flagsList) > 0 {
@@ -151,18 +125,18 @@ func (commands *Commands) HelpCommand(command *Command, values map[string]map[st
 			commands.Println("Flags:")
 			for _, name := range flagNames {
 				f := flagsList[name]
-				desc := f.usage
-				if f.def != "" {
+				desc := f.Usage
+				if f.Default != "" {
 					if desc != "" {
 						desc += " "
 					}
-					desc += fmt.Sprintf("(default: %q)", f.def)
+					desc += fmt.Sprintf("(default: %q)", f.Default)
 				}
-				if f.requirement != "" {
+				if f.Requirement != "" {
 					if desc != "" {
 						desc += " "
 					}
-					desc += "(" + f.requirement + ")"
+					desc += "(" + f.Requirement + ")"
 				}
 				if desc != "" {
 					commands.Printf("  --%-*s  %s\n", maxLen, name, desc)

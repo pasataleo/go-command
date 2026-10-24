@@ -130,12 +130,21 @@ func (commands *Commands) Execute(args []string) error {
 		return nil
 	}
 
+	// Only the config's flags count as claimed: a command's documented flags
+	// are the ones it takes through UnclaimedFlags, so they stay unclaimed.
 	knownFlags := config.FilterBySource[flags.Flag](found, "flags")
 	unclaimedFlags := flagsSource.Validate(knownFlags)
+	unclaimed := make(map[string][]string)
 	if len(unclaimedFlags) > 0 {
 		var err error
 		for unclaimedFlag, suggestion := range unclaimedFlags {
 			if unclaimedFlag == "help" || (unclaimedFlag == "version" && command == commands.Root) {
+				continue
+			}
+			if command.UnclaimedFlags != nil {
+				// The command takes these itself, and reports any it does not
+				// recognise once it has seen them.
+				unclaimed[unclaimedFlag] = values[unclaimedFlag]
 				continue
 			}
 			err = errorsx.Append(err, unknownFlag(unclaimedFlag, suggestion))
@@ -181,7 +190,7 @@ func (commands *Commands) Execute(args []string) error {
 	}
 
 	if command.Command != nil {
-		return command.Execute(args, cfg)
+		return command.run(args, cfg, unclaimed, flagNames(knownFlags, command.FlagDocs))
 	}
 
 	if len(args) > 0 || len(values) > 0 {
@@ -245,6 +254,19 @@ func findAll(cfg *config.Config, target interface{}) map[string]map[string]inter
 		merge(cfg.Find(target), fmt.Sprintf("%d\x00", i))
 	}
 	return found
+}
+
+// flagNames names every flag a command accepts: its config's, and those it
+// documents itself.
+func flagNames(config map[string]flags.Flag, documented []FlagDoc) []string {
+	names := make([]string, 0, len(config)+len(documented))
+	for _, flag := range config {
+		names = append(names, flag.Name)
+	}
+	for _, doc := range documented {
+		names = append(names, doc.Name)
+	}
+	return names
 }
 
 func parseCommands(name string, next interface{}) *Command {

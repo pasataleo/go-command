@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -35,8 +36,8 @@ func (commands *Commands) complete(command *Command, current string, found map[s
 		if command == commands.Root && commands.Version != "" {
 			completions = append(completions, "--"+versionCommand)
 		}
-		for _, flag := range collectCompletionFlags(found) {
-			completions = append(completions, "--"+flag.name)
+		for _, flag := range collectFlags(found, command.FlagDocs) {
+			completions = append(completions, "--"+flag.Name)
 		}
 	} else {
 		completions = append(completions, helpCommand)
@@ -115,13 +116,6 @@ complete -c %s -f -a "(%s)"
 
 // -- metadata collection --
 
-type completionFlag struct {
-	name        string
-	desc        string
-	def         string
-	requirement string
-}
-
 type completionEnvVar struct {
 	name        string
 	desc        string
@@ -129,8 +123,11 @@ type completionEnvVar struct {
 	requirement string
 }
 
-func collectCompletionFlags(meta map[string]map[string]interface{}) []completionFlag {
-	var result []completionFlag
+// collectFlags documents every flag a command takes, sorted by name: each
+// config flag in meta from its tags, and each flag the command documents
+// itself as it gave it.
+func collectFlags(meta map[string]map[string]interface{}, documented []FlagDoc) []FlagDoc {
+	result := slices.Clone(documented)
 	required := requirements(meta)
 	for path, sources := range meta {
 		if sources["hidden"] != nil {
@@ -140,12 +137,12 @@ func collectCompletionFlags(meta map[string]map[string]interface{}) []completion
 		if !ok {
 			continue
 		}
-		desc, _ := sources["usage"].(string)
+		usage, _ := sources["usage"].(string)
 		def, _ := sources["defaults"].(string)
-		result = append(result, completionFlag{name: flagValue.Name, desc: desc, def: def, requirement: required[path]})
+		result = append(result, FlagDoc{Flag: flagValue, Usage: usage, Default: def, Requirement: required[path]})
 	}
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].name < result[j].name
+		return result[i].Name < result[j].Name
 	})
 	return result
 }

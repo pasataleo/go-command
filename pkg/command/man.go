@@ -95,13 +95,13 @@ func manPage(name string, cmd *Command, version string, date time.Time, found ma
 	}
 
 	// OPTIONS
-	flagList := collectCompletionFlags(found)
+	flagList := collectFlags(found, cmd.FlagDocs)
 	if len(flagList) > 0 {
 		fmt.Fprintf(&sb, ".SH OPTIONS\n")
 		for _, flag := range flagList {
 			fmt.Fprintf(&sb, ".TP\n")
-			fmt.Fprintf(&sb, "\\fB\\-\\-%s\\fR\n", roffEscape(flag.name))
-			desc := manAnnotate(flag.desc, flag.def, flag.requirement)
+			fmt.Fprintf(&sb, "\\fB\\-\\-%s\\fR\n", roffEscape(flag.Name))
+			desc := manAnnotate(flag.Usage, flag.Default, flag.Requirement)
 			if desc != "" {
 				fmt.Fprintf(&sb, "%s\n", roffEscape(desc))
 			}
