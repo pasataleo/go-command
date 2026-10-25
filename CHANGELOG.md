@@ -13,6 +13,7 @@
 - Man pages for subcommands are generated from the same sources as the root page.
 - Help and man pages show a `oneof` field as `(required: one of --port, --socket)`.
 - `FormatErrors` prints `ConflictingValues` errors.
+- `version` and `--version` default to the version the binary was built at, or `dev`, so `command.Version` is optional.
 
 ## BUG FIXES
 

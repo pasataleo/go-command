@@ -37,6 +37,8 @@ func StdErr(err *os.File) OptionsFn {
 	}
 }
 
+// Version sets the version version and --version report, instead of the one
+// the binary was built with.
 func Version(v string) OptionsFn {
 	return func(commands *Commands) {
 		commands.Version = v
@@ -70,6 +72,7 @@ func Build(command string, commands interface{}, opts ...OptionsFn) *Commands {
 	cmd := &Commands{
 		Command: command,
 		Root:    root,
+		Version: buildVersion(),
 		Out:     os.Stdout,
 		Err:     os.Stderr,
 	}

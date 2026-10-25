@@ -627,6 +627,22 @@ func TestVersionFlag(t *testing.T) {
 	testingx.Capture(t, output).Equal("1.2.3\n")
 }
 
+// --- Version default: without the option, the version the binary was built at ---
+//
+// A test binary has no version stamped into it, so it reports "dev".
+func TestVersionDefault(t *testing.T) {
+	output := capture(t, func(opts OptionsFn) {
+		cmds := Build("app", map[string]interface{}{
+			"": "My CLI tool",
+		}, opts)
+
+		testingx.Call(t, cmds.Execute, []string{"--version"}).
+			NoError()
+	})
+
+	testingx.Capture(t, output).Equal("dev\n")
+}
+
 // --- Version arg: "version" as a positional arg prints the version string ---
 func TestVersionArg(t *testing.T) {
 	output := capture(t, func(opts OptionsFn) {

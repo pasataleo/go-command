@@ -246,7 +246,7 @@ Use `--` to stop subcommand routing and pass remaining args to the current comma
 ## Built-in commands
 
 - `help` / `--help` — auto-generated help output showing subcommands, flags, and environment variables
-- `version` / `--version` — prints the version string (root command only, requires `command.Version()` option)
+- `version` / `--version` — prints the version (root command only): the one the binary was built at, which `go build` stamps from version control and `go install` from the version installed, or `dev` when there is neither; `command.Version()` sets it explicitly
 - `completion [bash|zsh|fish]` — prints a shell completion script to stdout
 - `__man <dir>` — writes roff-format man pages to `dir` (hidden from help; see [Man pages](#man-pages))
 
@@ -294,7 +294,7 @@ command.Build("app", tree,
 )
 ```
 
-- `Version` — version string for `version` / `--version`
+- `Version` — version string for `version` / `--version`, instead of the build version
 - `StdOut` / `StdErr` — where output is written; both default to the process streams
 - `Injector` — the `*inject.Source` to resolve `inject` tags against (see [Dependency injection](#dependency-injection)). Omit it and commands run against an empty injector
 
