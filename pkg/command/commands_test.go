@@ -1070,8 +1070,7 @@ func TestFormatErrors_returnsOtherErrors(t *testing.T) {
 				"": func(args []string) error { return cause },
 			})
 
-			remaining := cmds.FormatErrors(cmds.Execute(nil))
-			testingx.Capture(t, remaining).ErrorContains(cause.Error())
+			testingx.Call(t, cmds.FormatErrors, cmds.Execute(nil)).ErrorContains(cause.Error())
 		})
 	}
 }
@@ -1164,11 +1163,9 @@ func TestUnclaimedFlags_unknownNamesReported(t *testing.T) {
 	cmds := Build("app", map[string]interface{}{"greet": cmd})
 
 	err := cmds.Execute([]string{"greet", "--nme", "world"})
-	testingx.Capture(t, errorsx.ErrorCode(err)).Equal(UnknownFlag)
+	testingx.Capture(t, err).ErrorCode(UnknownFlag)
 	testingx.Capture(t, err).ErrorContains("unknown flag: nme")
-
-	suggestion, _ := errorsx.GetAnnotation(err, "suggestion")
-	testingx.Capture(t, suggestion).Equal(any("name"))
+	testingx.Call(t, errorsx.GetAnnotation, err, "suggestion").True().Equal(any("name"))
 	testingx.Capture(t, cmd.ran).False()
 }
 
@@ -1176,8 +1173,7 @@ func TestUnclaimedFlags_errorStopsCommand(t *testing.T) {
 	cmd := &requestCommand{failWith: errorsx.New(errorsx.InvalidArgument, nil, "--name must not be empty")}
 	cmds := Build("app", map[string]interface{}{"greet": cmd})
 
-	err := cmds.Execute([]string{"greet", "--name", ""})
-	testingx.Capture(t, errorsx.ErrorCode(err)).Equal(errorsx.InvalidArgument)
+	testingx.Call(t, cmds.Execute, []string{"greet", "--name", ""}).ErrorCode(errorsx.InvalidArgument)
 	testingx.Capture(t, cmd.ran).False()
 }
 
@@ -1207,8 +1203,7 @@ func TestUnclaimedFlags_strictWithout(t *testing.T) {
 		"greet": &Command{Config: new(Config), Command: func([]string) error { return nil }},
 	})
 
-	err := cmds.Execute([]string{"greet", "--nme", "world"})
-	testingx.Capture(t, errorsx.ErrorCode(err)).Equal(UnknownFlag)
+	testingx.Call(t, cmds.Execute, []string{"greet", "--nme", "world"}).ErrorCode(UnknownFlag)
 }
 
 func TestFlagDocs_withoutUnclaimedFlagsPanics(t *testing.T) {
