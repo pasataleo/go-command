@@ -4,14 +4,11 @@
 
 - `Injector` build option, so man pages generated without an `Execute` call know about registered modules.
 - `oneof` groups on required fields, through go-config's `oneof` source.
-- `WithUnclaimedFlags` lets a command receive flags its config does not claim.
-- `WithFlagDocs` documents those flags in help, completion and man pages.
+- `WithUnclaimedFlags` lets a command receive flags its config does not claim, and `WithFlagDocs` documents them in help, completion and man pages.
 
 ## IMPROVEMENTS
 
-- Help, completion and man pages include the flags and environment variables of registered inject modules.
-- Man pages for subcommands are generated from the same sources as the root page.
-- Help and man pages show a `oneof` field as `(required: one of --port, --socket)`.
+- Help, completion and man pages cover registered inject modules' flags and environment variables, generate subcommands' man pages from the same sources as the root's, and show a `oneof` field as `(required: one of --port, --socket)`.
 - `FormatErrors` prints `ConflictingValues` errors.
 - `version` and `--version` default to the version the binary was built at, or `dev`, so `command.Version` is optional.
 
