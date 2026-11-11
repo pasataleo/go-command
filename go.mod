@@ -3,12 +3,12 @@ module github.com/pasataleo/go-command
 go 1.25.7
 
 require (
-	github.com/pasataleo/go-config v0.1.1-0.20261025094910-ab28f6050cc5
-	github.com/pasataleo/go-errorsx v0.1.0
-	github.com/pasataleo/go-testingx v0.1.1-0.20261025064809-0f0ac56e57fc
+	github.com/pasataleo/go-config v0.1.1-0.20261111132804-cd5bc4faf60d
+	github.com/pasataleo/go-errorsx v0.1.1-0.20261026164359-7e859e347e49
+	github.com/pasataleo/go-testingx v0.1.1-0.20261111132723-d87d4f343707
 )
 
 require (
 	github.com/pasataleo/go-colour v0.1.0 // indirect
-	github.com/pasataleo/go-reflectx v0.1.1-0.20261025094750-0e9485f46759 // indirect
+	github.com/pasataleo/go-reflectx v0.1.1-0.20261111132744-94ded3601320 // indirect
 )
